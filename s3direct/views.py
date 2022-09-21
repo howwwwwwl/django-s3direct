@@ -18,27 +18,32 @@ from .utils import (get_aws_credentials, get_aws_v4_signature,
 @require_POST
 def get_upload_params(request):
     """Authorises user and validates given file properties."""
+    print(f' - get_upload_params - request: {request}')
     file_name = request.POST['name']
     file_type = request.POST['type']
     file_size = int(request.POST['size'])
 
     dest = get_s3direct_destinations().get(
         request.POST.get('dest', None), None)
+    print(f' - get_upload_params - dest: {dest}')
     if not dest:
         resp = json.dumps({'error': 'File destination does not exist.'})
         return HttpResponseNotFound(resp, content_type='application/json')
 
     auth = dest.get('auth')
+    print(f' - get_upload_params - auth: {auth}')
     if auth and not auth(request.user):
         resp = json.dumps({'error': 'Permission denied.'})
         return HttpResponseForbidden(resp, content_type='application/json')
 
     allowed = dest.get('allowed')
+    print(f' - get_upload_params - allowed: {allowed}')
     if (allowed and file_type not in allowed) and allowed != '*':
         resp = json.dumps({'error': 'Invalid file type (%s).' % file_type})
         return HttpResponseBadRequest(resp, content_type='application/json')
 
     cl_range = dest.get('content_length_range')
+    print(f' - get_upload_params - cl_range: {cl_range}')
     if (cl_range and not cl_range[0] <= file_size <= cl_range[1]):
         msg = 'Invalid file size (must be between %s and %s bytes).'
         resp = json.dumps({'error': (msg % cl_range)})
@@ -51,22 +56,26 @@ def get_upload_params(request):
 
     bucket = dest.get('bucket',
                       getattr(settings, 'AWS_STORAGE_BUCKET_NAME', None))
+    print(f' - get_upload_params - bucket: {bucket}')
     if not bucket:
         resp = json.dumps({'error': 'S3 bucket config missing.'})
         return HttpResponseServerError(resp, content_type='application/json')
 
     region = dest.get('region', getattr(settings, 'AWS_S3_REGION_NAME', None))
+    print(f' - get_upload_params - region: {region}')
     if not region:
         resp = json.dumps({'error': 'S3 region config missing.'})
         return HttpResponseServerError(resp, content_type='application/json')
 
     endpoint = dest.get('endpoint',
                         getattr(settings, 'AWS_S3_ENDPOINT_URL', None))
+    print(f' - get_upload_params - endpoint: {endpoint}')
     if not endpoint:
         resp = json.dumps({'error': 'S3 endpoint config missing.'})
         return HttpResponseServerError(resp, content_type='application/json')
 
     aws_credentials = get_aws_credentials()
+    print(f' - get_upload_params - aws_credentials: {aws_credentials}')
     if not aws_credentials.secret_key or not aws_credentials.access_key:
         resp = json.dumps({'error': 'AWS credentials config missing.'})
         return HttpResponseServerError(resp, content_type='application/json')
@@ -80,6 +89,7 @@ def get_upload_params(request):
         'endpoint': endpoint,
         'acl': dest.get('acl') or 'public-read',
     }
+    print(f' - get_upload_params - upload_data: {upload_data}')
 
     optional_params = [
         'content_disposition', 'cache_control', 'server_side_encryption'
@@ -94,6 +104,7 @@ def get_upload_params(request):
                 upload_data[optional_param] = option
 
     resp = json.dumps(upload_data)
+    print(f' - get_upload_params - resp: {resp}')
     return HttpResponse(resp, content_type='application/json')
 
 
@@ -104,8 +115,12 @@ def generate_aws_v4_signature(request):
     dest = get_s3direct_destinations().get(unquote(request.POST['dest']))
     signing_date = datetime.strptime(request.POST['datetime'],
                                      '%Y%m%dT%H%M%SZ')
+    print(f' - generate_aws_v4_signature - request: {request}')
+    print(f' - generate_aws_v4_signature - dest: {dest}')
+    print(f' - generate_aws_v4_signature - signing_date: {signing_date}')
 
     auth = dest.get('auth')
+    print(f' - generate_aws_v4_signature - auth: {auth}')
     if auth and not auth(request.user):
         resp = json.dumps({'error': 'Permission denied.'})
         return HttpResponseForbidden(resp, content_type='application/json')
@@ -125,4 +140,5 @@ def generate_aws_v4_signature(request):
 
     signature = get_aws_v4_signature(signing_key, message)
     resp = json.dumps({'s3ObjKey': signature})
+    print(f' - generate_aws_v4_signature - resp: {resp}')
     return HttpResponse(resp, content_type='application/json')
